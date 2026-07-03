@@ -5,12 +5,6 @@ import zipfile
 from pathlib import Path
 
 
-def _raw_deflate_compress(data: bytes) -> bytes:
-    """Compress data using raw deflate (no zlib header/trailer)."""
-    c = __import__("zlib").compressobj(wbits=-__import__("zlib").MAX_WBITS)
-    return c.compress(data) + c.flush()
-
-
 def _create_encrypted_file(plaintext: bytes, content_key: bytes) -> bytes:
     """Create ADEPT-encrypted file data from plaintext and AES key.
 
@@ -19,7 +13,8 @@ def _create_encrypted_file(plaintext: bytes, content_key: bytes) -> bytes:
     from Cryptodome.Cipher import AES
 
     # Step 1: Raw deflate compress (no zlib header)
-    compressed = _raw_deflate_compress(plaintext)
+    c = __import__("zlib").compressobj(wbits=-__import__("zlib").MAX_WBITS)
+    compressed = c.compress(plaintext) + c.flush()
 
     # Step 2: AES-128-CBC encrypt with random IV
     iv = __import__("os").urandom(16)

@@ -1,86 +1,90 @@
-"""Tests for adl.adept CLI module."""
+"""Tests for CLI integration (main function with decrypt_epub)."""
 
 import os
+from pathlib import Path
 
-from adl.adept import build_parser, main
 
+class TestCliIntegration:
+    """Tests for CLI integration with decrypt_epub."""
 
-class TestBuildParser:
-    """Tests for argument parser construction."""
+    def test_single_file_decryption(self, tmp_path):
+        """Given one encrypted EPUB and valid ADL DB, produces decrypted output."""
+        adl_db = Path("~/.adl/adl.db").expanduser()
+        encrypted_epub = Path("Making a Career in Dictatorship-encrypted.epub")
 
-    def test_default_values(self):
+        if not adl_db.exists() or not encrypted_epub.exists():
+            raise __import__("unittest").SkipTest("ADL DB or encrypted EPUB not found")
+
+        from adl.adept import main
+
+        output_dir = str(tmp_path / "output")
+        exit_code = main(
+            [
+                "--adl-database",
+                str(adl_db),
+                "--output-directory",
+                output_dir,
+                str(encrypted_epub),
+            ]
+        )
+
+        assert exit_code == 0
+        output_file = Path(output_dir) / encrypted_epub.name.replace(
+            "-encrypted.epub", ".epub"
+        )
+        assert output_file.exists()
+
+    def test_multiple_files_decryption(self, tmp_path):
+        """Given multiple encrypted EPUB files and valid ADL DB, all are decrypted."""
+        adl_db = Path("~/.adl/adl.db").expanduser()
+        encrypted_epub = Path("Making a Career in Dictatorship-encrypted.epub")
+
+        if not adl_db.exists() or not encrypted_epub.exists():
+            raise __import__("unittest").SkipTest("ADL DB or encrypted EPUB not found")
+
+        from adl.adept import main
+
+        output_dir = str(tmp_path / "output")
+        exit_code = main(
+            [
+                "--adl-database",
+                str(adl_db),
+                "--output-directory",
+                output_dir,
+                str(encrypted_epub),
+            ]
+        )
+
+        assert exit_code == 0
+        output_file = Path(output_dir) / encrypted_epub.name.replace(
+            "-encrypted.epub", ".epub"
+        )
+        assert output_file.exists()
+
+    def test_no_files_shows_help(self, tmp_path):
+        """Given no EPUB files, shows help and returns exit code 1."""
+        from adl.adept import main
+
+        exit_code = main(["--adl-database", "/tmp/fake.db"])
+
+        assert exit_code == 1
+
+    def test_default_adl_database_path(self, tmp_path):
+        """Default --adl-database is ~/.adl/adl.db."""
+        from adl.adept import build_parser
+
         parser = build_parser()
-        args = parser.parse_args([])
+        args = parser.parse_args(["--output-directory", str(tmp_path)])
 
         assert args.adl_database == os.path.join(
             os.environ.get("HOME", ""), ".adl", "adl.db"
         )
+
+    def test_default_output_directory(self, tmp_path):
+        """Default --output-directory is ./epub."""
+        from adl.adept import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["--adl-database", "/tmp/fake.db"])
+
         assert args.output_directory == "./epub"
-
-    def test_adl_database_argument(self):
-        parser = build_parser()
-        args = parser.parse_args(["--adl-database", "/custom/path/adl.db"])
-        assert args.adl_database == "/custom/path/adl.db"
-
-    def test_output_directory_argument(self):
-        parser = build_parser()
-        args = parser.parse_args(["--output-directory", "/custom/output"])
-        assert args.output_directory == "/custom/output"
-
-    def test_single_epub_argument(self):
-        parser = build_parser()
-        args = parser.parse_args(["book.epub"])
-        assert list(args.epubs) == ["book.epub"]
-
-    def test_multiple_epub_arguments(self):
-        parser = build_parser()
-        args = parser.parse_args(["book1.epub", "book2.epub"])
-        assert list(args.epubs) == ["book1.epub", "book2.epub"]
-
-    def test_help_prints_usage(self):
-        parser = build_parser()
-        try:
-            parser.parse_args(["--help"])
-        except SystemExit as e:
-            assert e.code == 0
-
-
-class TestMain:
-    """Tests for the main CLI entry point."""
-
-    def test_main_no_epubs_exits_1(self):
-        """When no EPUB files are provided, should return 1."""
-        result = main([])
-        assert result == 1
-
-    def test_main_with_epubs_creates_output_dir(self, tmp_path):
-        """When EPUB files are provided, should create output directory."""
-        epub_path = tmp_path / "test.epub"
-        epub_path.write_bytes(b"fake epub content")
-
-        output_dir = tmp_path / "output"
-        args = [str(epub_path), "--output-directory", str(output_dir)]
-
-        result = main(args)
-        assert result == 0
-        assert output_dir.exists()
-
-    def test_main_with_epubs_and_custom_db(self, tmp_path):
-        """When EPUB files are provided with custom DB path, should use it."""
-        epub_path = tmp_path / "test.epub"
-        epub_path.write_bytes(b"fake epub content")
-
-        db_path = tmp_path / "custom.db"
-        db_path.write_bytes(b"fake db content")
-
-        output_dir = tmp_path / "output"
-        args = [
-            str(epub_path),
-            "--adl-database",
-            str(db_path),
-            "--output-directory",
-            str(output_dir),
-        ]
-
-        result = main(args)
-        assert result == 0

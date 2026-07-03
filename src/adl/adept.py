@@ -281,8 +281,8 @@ def build_parser():
 def main(argv=None):
     """Main entry point for adl-decode CLI.
 
-    Parses arguments, creates output directory, and returns exit code.
-    Decryption logic is implemented in subsequent tickets.
+    Parses arguments, creates output directory, and decrypts each EPUB file
+    using the ADL database keys.
 
     Returns:
         int: 0 on success, 1 if no EPUB files provided.
@@ -295,6 +295,11 @@ def main(argv=None):
         return 1
 
     os.makedirs(args.output_directory, exist_ok=True)
+
+    for epub_path in args.epubs:
+        output_name = os.path.basename(epub_path).replace("-encrypted", "")
+        output_path = os.path.join(args.output_directory, output_name)
+        decrypt_epub(epub_path, output_path, args.adl_database)
 
     return 0
 
