@@ -4,7 +4,6 @@ import base64
 from pathlib import Path
 
 
-
 def _create_test_rsa_keypair(key_size: int = 1024):
     """Generate a test RSA key pair and return (private_key, encrypted_content_key)."""
     from cryptography.hazmat.primitives.asymmetric import rsa as crypto_rsa

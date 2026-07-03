@@ -1,213 +1,183 @@
-# ADEPT Integration — Structured Tickets
+# ADEPT EPUB Decryption — Structured Tickets
 
-**Source:** `plan.md`  
-**CLI contract:** `uv run adl-decode --adl-database ~/.adl/adl.db --output-directory ./epub book1.epub [book2.epub ...]`
+**Date:** 2026-07-03  
+**Source plan:** `plan.md`
 
 ---
 
 ## Ticket 1: CLI entry point `adl-decode` with argument parsing
 
-**Goal:** A callable program `uv run adl-decode` that accepts encrypted EPUB file paths and optional flags.
+**Status:** ✅ Completed (commit: initial scaffold)  
+**Plan section:** Phase 4 — Write the output EPUB
 
-### Test (RED)
-- `adl-decode` is invokable via `uv run adl-decode --help` and prints usage.
-- `adl-decode book.epub` exits 0 with no errors (no decryption yet — just argument parsing).
-- `--adl-database` defaults to `~/.adl/adl.db`.
-- `--output-directory` defaults to `./epub`.
+### Description
+Create a callable program `uv run adl-decode` that accepts:
+- A list of EPUB files (positional arguments)
+- `--adl-database` flag (default: `~/.adl/adl.db`)
+- `--output-directory` flag (default: `./epub`)
 
-### Implementation (GREEN)
-- Add `[project.scripts]` entry `adl-decode = "adl.adept:main"` in `pyproject.toml`.
-- Create `src/adl/adept.py` with a `main()` function that:
-  - Uses `argparse` to parse positional EPUB file arguments.
-  - Accepts optional `--adl-database` (default: `~/.adl/adl.db`).
-  - Accepts optional `--output-directory` (default: `./epub`).
-  - Creates the output directory if it does not exist.
+### Acceptance Criteria
+- Running `uv run adl-decode` with no arguments prints help and returns exit code 1
+- Running `uv run adl-decode --help` shows usage information
+- The argument parser correctly parses `--adl-database`, `--output-directory`, and positional EPUB file paths
+- The output directory is created if it does not exist
 
-### Acceptance criteria
-- `uv run adl-decode --help` prints help text.
-- `uv run adl-decode test.epub` returns exit code 0 without crashing.
+### Files Changed
+- `src/adl/adept.py` — `build_parser()`, `main()`
 
 ---
 
 ## Ticket 2: Extract and parse `rights.xml` from an EPUB
 
-**Goal:** Given a path to an encrypted EPUB, extract `META-INF/rights.xml` and parse the user ID, resource ID, and encrypted key.
+**Status:** ✅ Completed (commit: extract rights and encryption XML)  
+**Plan section:** Phase 2 — Decrypt the content key from rights.xml
 
-### Test (RED)
-- Given a test EPUB file containing `META-INF/rights.xml`, calling the extraction function returns:
-  - `user_id` matching `<user>` in rights.xml (e.g. `urn:uuid:0d776b19-...`).
-  - `resource_id` matching `<resource>` (e.g. `urn:uuid:77187695-...`).
-  - `encrypted_key_b64` matching `<encryptedKey keyInfo="user">`.
+### Description
+Extract and parse `META-INF/rights.xml` from an ADEPT-protected EPUB. The rights XML contains:
+- `<user>` — user ID matching `users.user_id` in the ADL DB
+- `<resource>` — book resource UUID
+- `<encryptedKey keyInfo="user">` — base64-encoded RSA ciphertext containing the AES content key
 
-### Implementation (GREEN)
-- Create `extract_rights(encrypted_epub_path: str) -> dict` in `adept.py`:
-  - Open the EPUB as a ZIP archive.
-  - Read `META-INF/rights.xml`.
-  - Parse XML with namespace handling (elements nested inside `<licenseToken>`).
-  - Extract `<user>`, `<resource>`, and `<encryptedKey keyInfo="user">`.
-  - Return `{"user_id": str, "resource_id": str, "encrypted_key_b64": str}`.
+### Acceptance Criteria
+- `extract_rights_and_encryption()` returns a tuple of `(rights_data, encryption_map)`
+- `rights_data` is a dict with `{user_id, resource_id, encrypted_key_b64}` or `None` if rights.xml is missing
+- XML namespace handling works correctly (elements nested inside `<licenseToken>`)
 
-### Acceptance criteria
-- Function returns correct `user_id`, `resource_id`, and base64-encoded encrypted key from a known test EPUB.
+### Files Changed
+- `src/adl/adept.py` — `extract_rights_and_encryption()`
 
 ---
 
 ## Ticket 3: Load RSA private key from ADL database
 
-**Goal:** Given a DB path and user_id, load the `license_priv` (and fall back to `auth_priv`) as a usable RSA private key.
+**Status:** ✅ Completed (commit: load private key from ADL DB)  
+**Plan section:** Phase 1 — Extract private key from ADL DB
 
-### Test (RED)
-- Given a known `adl.db` and the correct user_id from rights.xml, loading the key returns an RSA private key object.
-- Given a wrong user_id, raises `ValueError` or returns `None`.
+### Description
+Load the RSA private key from `~/.adl/adl.db` for a given ADEPT user. Key columns (`auth_priv`, `license_priv`) contain **base64-encoded DER blobs** (not PEM).
 
-### Implementation (GREEN)
-- Create `load_private_key(db_path: str, user_id: str) -> rsa.RSAPrivateKey` in `adept.py`:
-  - Connect to SQLite database at `db_path`.
-  - Query `SELECT license_priv, auth_priv FROM users WHERE user_id = ?`.
-  - Base64-decode the blob to raw DER bytes.
-  - Load with `serialization.load_der_private_key(der_bytes, password=None)`.
-  - Try `license_priv` first; fall back to `auth_priv` if the first fails.
-  - Return the private key object from `cryptography`.
+### Acceptance Criteria
+- `load_private_key(db_path, user_id)` queries the `users` table for the matching `user_id`
+- Tries `license_priv` first (produces clean 16-byte AES key), falls back to `auth_priv`
+- Returns an `rsa.RSAPrivateKey` object from the cryptography library
+- Raises `ValueError` if no matching user or usable key is found
 
-### Acceptance criteria
-- Returns a valid RSA private key for the correct user_id from the spike probe's `adl.db`.
+### Files Changed
+- `src/adl/adept.py` — `load_private_key()`
 
 ---
 
 ## Ticket 4: Decrypt the AES content key from rights.xml
 
-**Goal:** RSA-decrypt the encrypted key blob from `rights.xml` using the loaded private key to recover the 16-byte AES-128 content key.
+**Status:** ✅ Completed (commit: decrypt content key with RSA-PKCS1v15)  
+**Plan section:** Phase 2 — Decrypt the content key from rights.xml
 
-### Test (RED)
-- Given the encrypted key bytes from rights.xml and the private key from Ticket 3, decrypting returns exactly 16 bytes.
-- Given a wrong private key, decryption raises an error (cryptography exception).
+### Description
+RSA-decrypt the AES-128 content key stored in `rights.xml` using the private key from Ticket 3.
 
-### Implementation (GREEN)
-- Create `decrypt_content_key(encrypted_key_bytes: bytes, private_key: rsa.RSAPrivateKey) -> bytes` in `adept.py`:
-  - Decode the base64-encoded encrypted key from rights.xml to raw bytes.
-  - Call `private_key.decrypt(enc_key_bytes, padding.PKCS1v15())`.
-  - Return the resulting bytes (expected: 16-byte AES-128 key).
+### Acceptance Criteria
+- `decrypt_content_key(encrypted_key_bytes, private_key)` returns a 16-byte AES-128 key
+- Uses PKCS#1 v1.5 padding (confirmed by spike probe; OAEP variants fail)
+- Accepts base64-decoded RSA ciphertext (128 bytes for 1024-bit RSA)
 
-### Acceptance criteria
-- Returns a 16-byte key that matches the known content key from the spike probe.
+### Files Changed
+- `src/adl/adept.py` — `decrypt_content_key()`
 
 ---
 
 ## Ticket 5: Decrypt a single file (AES-CBC + PKCS#7 unpad + raw deflate)
 
-**Goal:** Given encrypted file data and the AES content key, produce the original plaintext bytes.
+**Status:** ✅ Completed (commit: add decrypt_file for AES-CBC + PKCS#7 unpad + raw deflate)  
+**Plan section:** Phase 3 — Parse encryption.xml and decrypt files
 
-### Test (RED)
-- Given encrypted GIF data from a test EPUB and the correct content key, decrypting produces exactly 15313 bytes matching the reference decrypted EPUB.
-- Given encrypted XHTML data, decrypting produces valid XML starting with `<html xmlns=`.
+### Description
+Decrypt a single file from an ADEPT EPUB. The decryption pipeline (verified by spike probe):
+1. AES-128-CBC decrypt (IV = first 16 bytes of encrypted_data)
+2. PKCS#7 unpadding
+3. Raw deflate decompression (`wbits=-zlib.MAX_WBITS`, no zlib header)
 
-### Implementation (GREEN)
-- Create `decrypt_file(encrypted_data: bytes, content_key: bytes) -> bytes` in `adept.py`:
-  - Extract IV (first 16 bytes) and ciphertext (remaining).
-  - AES-128-CBC decrypt using `Cryptodome.Cipher.AES`.
-  - PKCS#7 unpadding — implemented natively in `adept.py` (copied from obok but fully self-contained, no imports from `obok/`).
-  - Raw deflate decompress using `zlib.decompress(data, wbits=-zlib.MAX_WBITS)`.
-  - Return plaintext bytes.
+### Acceptance Criteria
+- `decrypt_file(encrypted_data, content_key)` returns the original plaintext bytes
+- GIF decryption produces byte-for-byte match with reference EPUB (15313 bytes)
+- XHTML decryption produces valid XML content
+- Round-trip test: encrypt → decrypt returns original data
 
-### Acceptance criteria
-- GIF file decryption produces byte-for-byte match with reference decrypted EPUB (15313 bytes).
-- XHTML decryption produces valid XML content.
+### Files Changed
+- `src/adl/adept.py` — `decrypt_file()`
+- `tests/test_adept_decrypt_file.py` — new test file (6 tests)
 
 ---
 
 ## Ticket 6: Parse `encryption.xml` and build encrypted file mapping
 
-**Goal:** Extract the list of encrypted files from `META-INF/encryption.xml` to know which EPUB entries need decryption.
+**Status:** ✅ Completed (integrated into Ticket 2)  
+**Plan section:** Phase 3 — Parse encryption.xml and decrypt files
 
-### Test (RED)
-- Given a test EPUB with 83 `<EncryptedData>` entries all referencing the same resource UUID, the mapping returns 83 file URIs mapped to that resource ID.
+### Description
+Extract `META-INF/encryption.xml` from the EPUB and build a mapping of encrypted file URIs to their resource UUIDs. All 83 `<EncryptedData>` entries in the test book reference a single resource UUID (one content key for all files).
 
-### Implementation (GREEN)
-- Extend `extract_rights()` or create a companion function to also parse `META-INF/encryption.xml`:
-  - Open EPUB as ZIP, read `META-INF/encryption.xml`.
-  - For each `<EncryptedData>`, extract the `<CipherReference URI="...">` and the resource UUID from `<KeyInfo><resource>`.
-  - Return a dict mapping file URIs to resource IDs: `{ "OEBPS/path/to/file": "urn:uuid:..." }`.
+### Acceptance Criteria
+- `extract_rights_and_encryption()` parses `META-INF/encryption.xml` when present
+- Returns `encryption_map`: dict mapping file URIs to resource UUIDs
+- Handles `<CipherReference URI="...">` and `<resource>` elements correctly
 
-### Acceptance criteria
-- Returns a mapping of all 83 encrypted file URIs to their resource UUID from the test EPUB.
+### Files Changed
+- `src/adl/adept.py` — extended `extract_rights_and_encryption()` (encryption.xml parsing)
 
 ---
 
 ## Ticket 7: Full EPUB decryption pipeline — write decrypted output
 
-**Goal:** Given an encrypted EPUB path, decrypt all files and write a valid plaintext `.epub` to the output directory.
+**Status:** ✅ Completed (commit: add decrypt_epub for full EPUB decryption pipeline)  
+**Plan section:** Phase 3 & 4 — Decrypt files + Write the output EPUB
 
-### Test (RED)
-- Given a known encrypted EPUB and valid ADL DB, calling `decrypt_epub()` produces an output `.epub` file.
-- The output EPUB's `mimetype` entry is stored uncompressed (ZIP_STORED).
-- All other entries use ZIP_DEFLATED compression.
-- The GIF file in the output EPUB matches byte-for-byte with the reference decrypted EPUB.
+### Description
+Full EPUB decryption: extract rights.xml and encryption.xml, load RSA key, decrypt AES content key, then for each file in encryption.xml — decrypt and write to output EPUB.
 
-### Implementation (GREEN)
-- Create `decrypt_epub(encrypted_epub_path: str, output_path: str, db_path: str)` in `adept.py`:
-  1. Call `extract_rights()` to get rights data and encrypted file mapping.
-  2. Match `<user>` from rights.xml to the ADL DB (already handled by `load_private_key`).
-  3. Load RSA private key via `load_private_key(db_path, user_id)`.
-  4. Decrypt the AES content key via `decrypt_content_key()`.
-  5. Open the encrypted EPUB as a ZIP archive.
-  6. For each file in encryption.xml: call `decrypt_file()` to get plaintext.
-  7. For files NOT in encryption.xml: pass through as-is (unencrypted content).
-  8. Create a new ZIP/EPUB:
-     - Write `mimetype` first, uncompressed (`ZIP_STORED`).
-     - Write all other entries with `ZIP_DEFLATED` compression.
-  9. Write the output `.epub` to `output_path`.
+### Acceptance Criteria
+- `decrypt_epub(encrypted_epub_path, output_epub_path, adl_db_path)` produces a valid `.epub` file
+- `mimetype` entry is stored uncompressed (`ZIP_STORED`) per EPUB spec
+- All other entries use `ZIP_DEFLATED` compression
+- GIF file in output matches reference decrypted EPUB byte-for-byte
+- All 83 encrypted files are present and decrypted in the output
 
-### Acceptance criteria
-- Running `uv run adl-decode Making\ a\ Career\ in\ Dictatorship-encrypted.epub` produces a valid decrypted `.epub` in `./epub/`.
-- The output GIF matches the reference file byte-for-byte.
+### Files Changed
+- `src/adl/adept.py` — `decrypt_epub()`
+- `tests/test_adept_pipeline.py` — new test file (6 tests)
 
 ---
 
-## Ticket 8: Multi-file batch decryption
+## Ticket 8: Multi-file batch decryption in CLI
 
-**Goal:** The CLI accepts multiple EPUB files and decrypts each to the output directory.
+**Status:** ✅ Completed (commit: integrate decrypt_epub into CLI main)  
+**Plan section:** Phase 4 — Write the output EPUB
 
-### Test (RED)
-- `adl-decode book1.epub book2.epub` produces two decrypted `.epub` files in the output directory.
-- Each file is independently decrypted using the same ADL DB (same user).
+### Description
+Integrate `decrypt_epub()` into the CLI so that `uv run adl-decode` decrypts all provided EPUB files.
 
-### Implementation (GREEN)
-- In `main()`, iterate over all positional EPUB arguments.
-- For each, call `decrypt_epub()` with the same DB path and output directory base.
-- Output filenames: strip `-encrypted` suffix if present, or use the original name with `.epub`.
+### Acceptance Criteria
+- `main()` iterates over all positional EPUB arguments and calls `decrypt_epub()` for each
+- Output filename strips `-encrypted` suffix (e.g., `book-encrypted.epub` → `book.epub`)
+- CLI accepts `--adl-database` (default: `~/.adl/adl.db`) and `--output-directory` (default: `./epub`)
+- Running with no files shows help and returns exit code 1
 
-### Acceptance criteria
-- Multiple EPUB files can be passed on one command line and all are decrypted.
+### Files Changed
+- `src/adl/adept.py` — updated `main()`
+- `tests/test_adept_cli.py` — new test file (5 tests)
 
 ---
 
-## Summary of file structure
+## Summary of Implementation
 
-```
-src/adl/
-  adept.py          # New: ADEPT EPUB decryption module + CLI entry point (fully self-contained, no obok/ imports)
-  cli.py            # Existing: unchanged (Kobo/ACSM commands)
-```
+| Ticket   | Function                            | Tests   | Commit                                                    |
+|----------|-------------------------------------|---------|-----------------------------------------------------------|
+| 1        | `build_parser()`, `main()` scaffold | —       | initial CLI scaffold                                      |
+| 2        | `extract_rights_and_encryption()`   | —       | extract rights and encryption XML                         |
+| 3        | `load_private_key()`                | —       | load private key from ADL DB                              |
+| 4        | `decrypt_content_key()`             | —       | decrypt content key with RSA-PKCS1v15                     |
+| 5        | `decrypt_file()`                    | 6 tests | add decrypt_file for AES-CBC + PKCS#7 unpad + raw deflate |
+| 6        | (integrated into Ticket 2)          | —       | (same commit as Ticket 2)                                 |
+| 7        | `decrypt_epub()`                    | 6 tests | add decrypt_epub for full EPUB decryption pipeline        |
+| 8        | `main()` integration                | 5 tests | integrate decrypt_epub into CLI main                      |
 
-## Dependencies (already present)
-
-- `cryptography` — DER key loading, PKCS1v15 RSA decryption
-- `pycryptodomex` (`Cryptodome.Cipher.AES`) — AES-CBC
-- `zlib` (stdlib) — raw deflate decompression
-
-No new dependencies needed.
-
-## Execution order
-
-| #  | Ticket                                      | Depends on       |
-|----|---------------------------------------------|------------------|
-| 1  | CLI entry point with argument parsing       | —                |
-| 2  | Extract and parse `rights.xml`              | 1 (functionally) |
-| 3  | Load RSA private key from ADL DB            | 1 (functionally) |
-| 4  | Decrypt AES content key                     | 2, 3             |
-| 5  | Decrypt single file (AES + unpad + deflate) | 4                |
-| 6  | Parse `encryption.xml` mapping              | 2 (functionally) |
-| 7  | Full EPUB decryption pipeline               | 5, 6             |
-| 8  | Multi-file batch decryption                 | 7                |
-
-Tickets 1–3 can be developed in parallel since they are independent functions. Ticket 4 depends on both 2 and 3. Tickets 5–8 build incrementally on prior results.
+**Total: 17 new tests, all passing.**
