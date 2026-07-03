@@ -9,7 +9,7 @@ import os
 import sqlite3
 import sys
 import zipfile
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from xml.etree import ElementTree
 from cryptography.hazmat.primitives.serialization import load_der_private_key
 
@@ -141,6 +141,24 @@ def load_private_key(db_path: str, user_id: str) -> rsa.RSAPrivateKey:
         f"User {user_id} exists but no usable private key found "
         "(license_priv and auth_priv are missing or invalid)"
     )
+
+
+def decrypt_content_key(
+    encrypted_key_bytes: bytes, private_key: rsa.RSAPrivateKey
+) -> bytes:
+    """RSA-decrypt the AES content key from rights.xml.
+
+    Uses PKCS#1 v1.5 padding (confirmed by spike probe).
+    Returns 16-byte AES-128 key.
+
+    Args:
+        encrypted_key_bytes: Base64-decoded RSA ciphertext from rights.xml.
+        private_key: The RSA private key loaded from the ADL database.
+
+    Returns:
+        16-byte AES-128 content key.
+    """
+    return private_key.decrypt(encrypted_key_bytes, padding.PKCS1v15())
 
 
 def build_parser():
