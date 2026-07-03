@@ -1,5 +1,5 @@
 import logging
-import requests
+import httpx
 from lxml import etree
 
 from .xml_tools import ADEPT_NS, NSMAP, add_subelement, get_error
@@ -74,7 +74,7 @@ def get_ebook(filename):
 
         # Get epub URL and download it
         logging.info("Downloading {} from {} ...".format(title, ebook_url))
-        r = requests.get(ebook_url)
+        r = httpx.get(ebook_url)
         r.raise_for_status()
         epub = r.content
 

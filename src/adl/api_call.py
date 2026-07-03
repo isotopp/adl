@@ -1,5 +1,5 @@
 import logging
-import requests
+import httpx
 import base64
 from lxml import etree
 
@@ -8,6 +8,8 @@ from . import utils
 
 
 class APICall:
+    TIMEOUT = (10, 30)
+
     def __init__(self):
         self.method = "post"
 
@@ -28,11 +30,15 @@ class APICall:
 
         try:
             if self.method == "post":
-                r = requests.post(url, data=data_str, headers=headers)
+                r = httpx.post(
+                    url, content=data_str, headers=headers, timeout=self.TIMEOUT
+                )
             elif self.method == "get":
-                r = requests.get(url)
+                r = httpx.get(url, timeout=self.TIMEOUT)
             r.raise_for_status()
             reply = r.text
+        except (httpx.ConnectTimeout, httpx.ReadTimeout):
+            raise
         except Exception:
             logging.exception("Error when targeting {}".format(url))
             return None
