@@ -1,10 +1,36 @@
-*.pyc
-*.swp
-tmp.py
-/.idea
-/.venv
-/.python-version
-*.egg-info
-dist/
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test, lint, and type-check caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments and local Python versions
+.venv/
+venv/
+env/
+.python-version
+
+# Packaging and build outputs
+*.egg-info/
+.eggs/
 build/
-/.venv
+dist/
+
+# Editor and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Local scratch files
+tmp.py
