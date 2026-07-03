@@ -10,6 +10,7 @@ import sqlite3
 import sys
 import zipfile
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from Cryptodome.Cipher import AES
 from xml.etree import ElementTree
 from cryptography.hazmat.primitives.serialization import load_der_private_key
 
@@ -159,6 +160,35 @@ def decrypt_content_key(
         16-byte AES-128 content key.
     """
     return private_key.decrypt(encrypted_key_bytes, padding.PKCS1v15())
+
+
+def decrypt_file(encrypted_data: bytes, content_key: bytes) -> bytes:
+    """Decrypt a single file from an ADEPT EPUB.
+
+    Pipeline (verified by spike probe):
+      1. AES-128-CBC with IV = first 16 bytes of encrypted_data
+      2. PKCS#7 unpadding
+      3. Raw deflate decompression (wbits=-zlib.MAX_WBITS, no zlib header)
+
+    Args:
+        encrypted_data: IV (first 16 bytes) + AES-CBC ciphertext.
+        content_key: 16-byte AES-128 key from decrypt_content_key().
+
+    Returns:
+        The original plaintext bytes.
+    """
+    iv = encrypted_data[:16]
+    ciphertext = encrypted_data[16:]
+
+    dec = AES.new(content_key, AES.MODE_CBC, iv=iv).decrypt(ciphertext)
+
+    # PKCS#7 unpadding
+    pad_len = dec[-1]
+    if 1 <= pad_len <= 16 and all(b == pad_len for b in dec[-pad_len:]):
+        dec = dec[:-pad_len]
+
+    # Raw deflate decompress (all files are raw-deflate compressed before AES)
+    return __import__("zlib").decompress(dec, wbits=-__import__("zlib").MAX_WBITS)
 
 
 def build_parser():
