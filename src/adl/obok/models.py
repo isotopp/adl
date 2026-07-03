@@ -359,7 +359,9 @@ class KoboLibrary:
         self.bookdir = os.path.join(self.kobodir, "kepub")
 
         # Copy DB to ensure WAL mode doesn't interfere with sqlite3 module
-        self._newdb_path = tempfile.mktemp(suffix=".sqlite")
+        newdb_temp = tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False)
+        self._newdb_path = newdb_temp.name
+        newdb_temp.close()
         olddb = open(db_path, "rb")
         with open(self._newdb_path, "wb") as newdb:
             newdb.write(olddb.read(18))
@@ -542,19 +544,31 @@ class KoboLibrary:
         )
 
         try:
-            for line in os.popen("ip -br link"):
+            output = subprocess.run(
+                ["ip", "-br", "link"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+            for line in output.splitlines():
                 m = mac_re_colon.search(line)
                 if m:
                     macs.append(m.group(1).upper())
-        except Exception:
+        except (OSError, subprocess.SubprocessError):
             pass
 
         try:
-            for line in os.popen("ipconfig /all"):
+            output = subprocess.run(
+                ["ipconfig", "/all"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+            for line in output.splitlines():
                 m = mac_re_dash.search(line)
                 if m:
                     macs.append(re.sub("-", ":", m.group(1)).upper())
-        except Exception:
+        except (OSError, subprocess.SubprocessError):
             pass
 
         return macs
