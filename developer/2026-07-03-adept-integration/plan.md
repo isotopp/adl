@@ -82,9 +82,9 @@ The `ResourceSize` metadata element indicates the original plaintext size of eac
 
 ---
 
-## How Adobe ADEPT DRM Works (vs Kobo)
+## How Adobe ADEPT DRM Works
 
-### Kobo DRM (what `obok` currently handles)
+### Kobo DRM
 
 1. Derive a user key from MAC address + device serial via SHA-256 hashing chain
 2. Per-file page keys stored in the Kobo DB (`content_keys`) table as base64-encoded blobs  
@@ -96,13 +96,13 @@ The `ResourceSize` metadata element indicates the original plaintext size of eac
 2. **File pipeline:** original file → raw-deflate compressed → AES-128-CBC encrypted (IV prepended as first 16 bytes of ciphertext)
 3. Files are stored in the EPUB ZIP with `compress_type=0` (STORED/uncompressed), containing the full IV+ciphertext blob
 
-**The two schemes are fundamentally different.** Obok's key derivation, page-key lookup, and ECB-mode decryption do not apply to ADEPT EPUBs.
+**The two schemes are fundamentally different.** Kobo key derivation, page-key lookup, and ECB-mode decryption do not apply to ADEPT EPUBs.
 
 ---
 
 ## Plan
 
-### Phase 1: Extract private key from ADL DB (no obok code reuse)
+### Phase 1: Extract private key from ADL DB
 
 1. Open `~/.adl/adl.db`
 2. Look up the user whose `user_id` matches `<user>` in the EPUB's `rights.xml`:
@@ -119,7 +119,7 @@ The `ResourceSize` metadata element indicates the original plaintext size of eac
    private_key = serialization.load_der_private_key(der_bytes, password=None)
    ```
 
-### Phase 2: Decrypt the content key from rights.xml (no obok code reuse)
+### Phase 2: Decrypt the content key from rights.xml
 
 1. Extract `META-INF/rights.xml` from the EPUB  
 2. Parse XML with namespace handling — elements are nested inside `<licenseToken>`:
@@ -176,30 +176,14 @@ The `ResourceSize` metadata element indicates the original plaintext size of eac
 
 ---
 
-## What from obok Can Be Reused
+## Recommended Approach
 
-| Obok Component                              | Usable?            | Notes                                                                                                                                              |
-|---------------------------------------------|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
-| `crypto.unpad()` (`src/adl/obok/crypto.py`) | **Yes**            | PKCS#7 unpadding utility. The spike probe confirmed PKCS#7 padding is used after AES decryption, so this helper can be reused as-is.               |
-| `KoboBook` / `KoboLibrary` classes          | **No**             | These are tightly coupled to Kobo DB schema (`content`, `content_keys` tables) and MAC-based key derivation. Not applicable to ADEPT.              |
-| ZIP iteration pattern in `decrypt_book()`   | **Reference only** | The structure of iterating EPUB entries, conditionally transforming them, and writing output is similar but the crypto pipeline differs entirely.  |
-| CLI infrastructure (`src/adl/obok/cli.py`)  | **No**             | Built around Kobo library discovery (device paths, desktop directories). ADEPT decryption needs a different input model (EPUB path + ADL DB path). |
-
-### Recommended approach
-
-Create a separate module `src/adl/adept.py` rather than modifying obok:
+Create a separate module `src/adl/adept.py` for ADEPT processing:
 
 ```
 src/adl/
   adept.py          # New: ADEPT EPUB decryption (rights.xml + encryption.xml + ADL private key)
-  obok/
-    __init__.py     # Unchanged
-    models.py       # Unchanged — Kobo-specific, do not modify
-    crypto.py       # PKCS#7 unpadding helper; can optionally export at package level
-    cli.py          # Unchanged
 ```
-
-This keeps the two DRM removal paths separate and maintainable.
 
 ---
 
@@ -288,7 +272,7 @@ def decrypt_epub(encrypted_epub_path: str, output_path: str, db_path: str):
 The project already depends on:
 
 - `cryptography` — for loading DER private keys and PKCS1v15 RSA decryption  
-- `pycryptodomex` (`Cryptodome.Cipher.AES`) — already used by obok, reused here for AES-CBC
+- `pycryptodomex` (`Cryptodome.Cipher.AES`) — for AES-CBC
 - `zlib` — standard library, for raw deflate decompression after AES decryption
 
 No new dependencies needed.

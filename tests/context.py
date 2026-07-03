@@ -15,9 +15,7 @@ from adl import (  # noqa: E402,F401
     device,
     epub_get,
     login,
-    obok,
     patch_epub,
     utils,
     xml_tools,
 )
-from adl.obok import cli as obok_cli  # noqa: E402,F401

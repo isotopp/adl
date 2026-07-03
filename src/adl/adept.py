@@ -1,6 +1,6 @@
 """Adobe ADEPT EPUB decryption using ADL authorization database keys.
 
-This module is fully self-contained and does not import from obok/.
+This module is fully self-contained.
 """
 
 import argparse
