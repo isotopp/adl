@@ -4,10 +4,14 @@ This module is fully self-contained and does not import from obok/.
 """
 
 import argparse
+import base64
 import os
+import sqlite3
 import sys
 import zipfile
+from cryptography.hazmat.primitives.asymmetric import rsa
 from xml.etree import ElementTree
+from cryptography.hazmat.primitives.serialization import load_der_private_key
 
 
 def extract_rights_and_encryption(encrypted_epub_path: str):
@@ -80,6 +84,63 @@ def extract_rights_and_encryption(encrypted_epub_path: str):
                         encryption_map[cipher_ref] = resource_uuid
 
     return rights_data, encryption_map
+
+
+def load_private_key(db_path: str, user_id: str) -> rsa.RSAPrivateKey:
+    """Load the RSA private key from an ADL database for a given user.
+
+    Keys are stored as base64-encoded DER blobs (not PEM).
+    Tries license_priv first; falls back to auth_priv if decryption fails.
+
+    Args:
+        db_path: Path to the ADL SQLite database file.
+        user_id: The user_id matching <user> in rights.xml (e.g. urn:uuid:...).
+
+    Returns:
+        An rsa.RSAPrivateKey object from the cryptography library.
+
+    Raises:
+        ValueError: If no matching user is found or keys cannot be loaded.
+    """
+    conn = sqlite3.connect(db_path)
+    conn.text_factory = str
+    c = conn.cursor()
+
+    rows = c.execute(
+        "SELECT license_priv, auth_priv FROM users WHERE user_id = ?", (user_id,)
+    ).fetchone()
+
+    conn.close()
+
+    if rows is None:
+        raise ValueError(f"No user found with user_id={user_id}")
+
+    license_priv_b64, auth_priv_b64 = rows[0], rows[1]
+
+    # Try license_priv first (per plan: it gives a clean 16-byte AES key)
+    if license_priv_b64:
+        try:
+            der_bytes = base64.b64decode(license_priv_b64)
+            key = load_der_private_key(der_bytes, password=None)
+            if isinstance(key, rsa.RSAPrivateKey):
+                return key
+        except Exception:
+            pass
+
+    # Fall back to auth_priv
+    if auth_priv_b64:
+        try:
+            der_bytes = base64.b64decode(auth_priv_b64)
+            key = load_der_private_key(der_bytes, password=None)
+            if isinstance(key, rsa.RSAPrivateKey):
+                return key
+        except Exception:
+            pass
+
+    raise ValueError(
+        f"User {user_id} exists but no usable private key found "
+        "(license_priv and auth_priv are missing or invalid)"
+    )
 
 
 def build_parser():
