@@ -237,6 +237,8 @@ def decrypt_epub(encrypted_epub_path: str, output_epub_path: str, adl_db_path: s
             output_epub_path, "w", compression=zipfile.ZIP_DEFLATED
         ) as out_zf:
             for name in enc_zf.namelist():
+                if name in ("META-INF/encryption.xml", "META-INF/rights.xml"):
+                    continue
                 if name == "mimetype":
                     # mimetype must be stored uncompressed (ZIP_STORED) per EPUB spec
                     data = enc_zf.read(name)

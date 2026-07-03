@@ -136,7 +136,12 @@ class TestDecryptEpub:
             zipfile.ZipFile(encrypted_epub) as enc_zf,
             zipfile.ZipFile(output_path) as out_zf,
         ):
-            enc_names = set(n for n in enc_zf.namelist() if n != "mimetype")
+            enc_names = set(
+                n
+                for n in enc_zf.namelist()
+                if n
+                not in ("mimetype", "META-INF/encryption.xml", "META-INF/rights.xml")
+            )
             out_names = set(n for n in out_zf.namelist() if n != "mimetype")
 
             # All encrypted files should be in output
