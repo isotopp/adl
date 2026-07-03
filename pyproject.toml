@@ -2,7 +2,7 @@
 name = "adl"
 version = "0.1.0"
 description = "Download ebooks from Adobe ACSM files."
-readme = "README.rst"
+readme = "README.md"
 requires-python = ">=3.9"
 license = "GPL-3.0-or-later"
 dependencies = [
@@ -17,6 +17,8 @@ adl = "adl.cli:main"
 [dependency-groups]
 dev = [
   "pytest>=8.0,<9",
+  "ruff>=0.15.20",
+  "ty>=0.0.56",
 ]
 
 [build-system]
@@ -28,3 +30,15 @@ module-root = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+src = ["src", "tests"]
+
+[tool.ty.src]
+include = ["src", "tests"]
+
+[tool.ty.rules]
+unresolved-import = "ignore"
+unresolved-attribute = "ignore"
+invalid-argument-type = "ignore"
+invalid-assignment = "ignore"

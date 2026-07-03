@@ -16,25 +16,28 @@ import zipfile
 import io
 import argparse
 
+
 def patch(raw_data, rights_content):
-  buf = io.BytesIO(raw_data)
-  z = zipfile.ZipFile(buf, mode='a')
-  z.writestr("META-INF/rights.xml", rights_content)
-  z.close()
-  new_data = buf.getvalue()
-  buf.close()
-  return new_data
+    buf = io.BytesIO(raw_data)
+    z = zipfile.ZipFile(buf, mode="a")
+    z.writestr("META-INF/rights.xml", rights_content)
+    z.close()
+    new_data = buf.getvalue()
+    buf.close()
+    return new_data
+
 
 if __name__ == "__main__":
-  parser = argparse.ArgumentParser(description='Patch the epub file to add the rights.xml file')
-  parser.add_argument('--filename', dest="filename", required=True,
-                      help='The epub')
+    parser = argparse.ArgumentParser(
+        description="Patch the epub file to add the rights.xml file"
+    )
+    parser.add_argument("--filename", dest="filename", required=True, help="The epub")
 
-  args = parser.parse_args()
+    args = parser.parse_args()
 
-  with open(args.filename) as f:
-    data = f.read()
-    buf = patch(data, "<toto/>")
-    
-    with open("patched.epub", "w") as w:
-      w.write(buf)
+    with open(args.filename) as f:
+        data = f.read()
+        buf = patch(data, "<toto/>")
+
+        with open("patched.epub", "w") as w:
+            w.write(buf)
