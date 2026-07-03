@@ -15,6 +15,7 @@ dependencies = [
 [project.scripts]
 adl = "adl.cli:main"
 obok = "adl.obok.cli:main"
+adl-decode = "adl.adept:main"
 
 [dependency-groups]
 dev = [
