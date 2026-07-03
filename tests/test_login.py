@@ -2,14 +2,19 @@ from context import login, data, bom
 from unittest.mock import patch
 import unittest
 import base64
+import httpx
 
 
 class TestLogin(unittest.TestCase):
     def test_actinfo_ok(self):
         reply = b'<activationServiceInfo xmlns="http://ns.adobe.com/adept"><authURL>http://adeactivate.adobe.com/adept</authURL><userInfoURL>http://adeactivate.adobe.com/adept</userInfoURL><certificate>TOTO</certificate></activationServiceInfo>'
-        with patch("requests.get") as mock_request:
-            mock_request.return_value.status_code = 200
-            mock_request.return_value.text = reply
+        with patch("adl.api_call.httpx.get") as mock_request:
+            get_request = httpx.Request(
+                "GET", "http://adeactivate.adobe.com/adept/ActivationServiceInfo"
+            )
+            mock_request.return_value = httpx.Response(
+                text=reply.decode(), status_code=200, request=get_request
+            )
 
             auth_url, user_url, certificate = login.activation_init()
             self.assertEqual(auth_url, "http://adeactivate.adobe.com/adept")
@@ -18,9 +23,13 @@ class TestLogin(unittest.TestCase):
 
     def test_authinfo_ok(self):
         reply = b'<authenticationServiceInfo xmlns="http://ns.adobe.com/adept"><authURL>http://adeactivate.adobe.com/adept</authURL><certificate>TITI</certificate><signInMethods><signInMethod method="AdobeID" type="direct">Adobe ID</signInMethod><signInMethod method="anonymous" type="direct">anonymous</signInMethod></signInMethods></authenticationServiceInfo>'
-        with patch("requests.get") as mock_request:
-            mock_request.return_value.status_code = 200
-            mock_request.return_value.text = reply
+        with patch("adl.api_call.httpx.get") as mock_request:
+            get_request = httpx.Request(
+                "GET", "http://adeactivate.adobe.com/adept/AuthenticationServiceInfo"
+            )
+            mock_request.return_value = httpx.Response(
+                text=reply.decode(), status_code=200, request=get_request
+            )
 
             certificate = login.authentication_init()
             self.assertEqual(certificate, "TITI")
@@ -46,9 +55,13 @@ class TestLogin(unittest.TestCase):
         data.config = c
         data.accounts = [a]
 
-        with patch("requests.post") as mock_request:
-            mock_request.return_value.status_code = 200
-            mock_request.return_value.text = reply
+        with patch("adl.api_call.httpx.post") as mock_request:
+            post_request = httpx.Request(
+                "POST", "http://adeactivate.adobe.com/adept/SignInDirect"
+            )
+            mock_request.return_value = httpx.Response(
+                text=reply, status_code=200, request=post_request
+            )
 
             login.sign_in(data, a, None, None)
             self.assertEqual(a.urn, "urn:uuid:563084fa-6c5c-4489-b8a6-b9e053dcbb7c")

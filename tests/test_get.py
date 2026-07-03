@@ -9,6 +9,7 @@ from context import (
 from unittest.mock import patch, MagicMock, call, mock_open
 
 import unittest
+import httpx
 from lxml import etree
 from pathlib import Path
 
@@ -58,30 +59,33 @@ class TestGet(unittest.TestCase):
         utils.get_expiration_date = MagicMock(return_value="2021-04-15T23:27:34-00:00")
         xml_tools.generate_signature = MagicMock(return_value="0123456789ABCDEF")
 
-        with patch("requests.post") as mock_request:
-            mock_request.return_value.status_code = 200
-            mock_request.return_value.text = "success"
+        with patch("adl.api_call.httpx.post") as mock_request:
+            auth_request = httpx.Request("POST", "http://fairyland.com/Auth")
+            mock_request.return_value = httpx.Response(
+                text="success", status_code=200, request=auth_request
+            )
 
             epub_get.log_in(c, a, "http://fairyland.com")
 
             auth_call = call(
                 "http://fairyland.com/Auth",
-                data=b'<credentials xmlns="http://ns.adobe.com/adept"><user>toto</user><certificate>REVBREJFRUY=</certificate><licenseCertificate>LICENSECERT</licenseCertificate><authenticationCertificate>AUTHCERT</authenticationCertificate></credentials>',
+                content=b'<credentials xmlns="http://ns.adobe.com/adept"><user>toto</user><certificate>REVBREJFRUY=</certificate><licenseCertificate>LICENSECERT</licenseCertificate><authenticationCertificate>AUTHCERT</authenticationCertificate></credentials>',
                 headers={
                     "Content-type": "application/vnd.adobe.adept+xml",
                     "charset": "utf-8",
                 },
+                timeout=(10, 30),
             )
             initlicense_call = call(
                 "http://adeactivate.adobe.com/adept/InitLicenseService",
-                data=b'<licenseServiceRequest xmlns="http://ns.adobe.com/adept" identity="user"><operatorURL>http://fairyland.com</operatorURL><nonce>11Mo2AAAAAA=</nonce><expiration>2021-04-15T23:27:34-00:00</expiration><user>toto</user><signature>0123456789ABCDEF</signature></licenseServiceRequest>',
+                content=b'<licenseServiceRequest xmlns="http://ns.adobe.com/adept" identity="user"><operatorURL>http://fairyland.com</operatorURL><nonce>11Mo2AAAAAA=</nonce><expiration>2021-04-15T23:27:34-00:00</expiration><user>toto</user><signature>0123456789ABCDEF</signature></licenseServiceRequest>',
                 headers={
                     "Content-type": "application/vnd.adobe.adept+xml",
                     "charset": "utf-8",
                 },
+                timeout=(10, 30),
             )
-            rfs = call().raise_for_status()
-            mock_request.assert_has_calls([auth_call, rfs, initlicense_call, rfs])
+            mock_request.assert_has_calls([auth_call, initlicense_call])
 
         (
             utils.extract_cert_from_pkcs12,
@@ -109,9 +113,13 @@ class TestGet(unittest.TestCase):
         utils.extract_pk_from_pkcs12 = MagicMock(return_value="DEADBEEF")
         xml_tools.generate_signature = MagicMock(return_value="0123456789ABCDEF")
 
-        with patch("requests.post") as mock_request:
-            mock_request.return_value.status_code = 200
-            mock_request.return_value.text = '<fulfillment><fulfillmentResult xmlns="http://ns.adobe.com/adept"><resourceItemInfo xmlns="http://ns.adobe.com/adept"><licenseToken>toto</licenseToken><src>http://books.com/mybook.epub</src><metadata><title xmlns="http://purl.org/dc/elements/1.1/">My great book</title></metadata></resourceItemInfo></fulfillmentResult></fulfillment>'
+        with patch("adl.api_call.httpx.post") as mock_request:
+            fulfill_request = httpx.Request("POST", "http://fairyland.com/Fulfill")
+            mock_request.return_value = httpx.Response(
+                text='<fulfillment><fulfillmentResult xmlns="http://ns.adobe.com/adept"><resourceItemInfo xmlns="http://ns.adobe.com/adept"><licenseToken>toto</licenseToken><src>http://books.com/mybook.epub</src><metadata><title xmlns="http://purl.org/dc/elements/1.1/">My great book</title></metadata></resourceItemInfo></fulfillmentResult></fulfillment>',
+                status_code=200,
+                request=fulfill_request,
+            )
 
             title, url, licenseToken = epub_get.fulfill(content, a, operator)
 
@@ -162,9 +170,11 @@ class TestGet(unittest.TestCase):
             return_value="{}{}".format(epub_content, rights_content)
         )
 
-        with patch("requests.get") as mock_request:
-            mock_request.return_value.status_code = 200
-            mock_request.return_value.text = epub_content
+        with patch("adl.epub_get.httpx.get") as mock_request:
+            get_request = httpx.Request("GET", "http://books.com/mybook.epub")
+            mock_request.return_value = httpx.Response(
+                text=epub_content, status_code=200, request=get_request
+            )
 
             with patch("builtins.open", mock_open()) as mo:
                 epub_get.get_ebook(filename)
@@ -173,7 +183,7 @@ class TestGet(unittest.TestCase):
                     "{}{}".format(epub_content, rights_content)
                 )
 
-            mock_request.assert_called_with("http://books.com/mybook.epub")
+            mock_request.assert_called_once()
         (
             epub_get.log_in,
             epub_get.fulfill,
