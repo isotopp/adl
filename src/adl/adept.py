@@ -191,6 +191,70 @@ def decrypt_file(encrypted_data: bytes, content_key: bytes) -> bytes:
     return __import__("zlib").decompress(dec, wbits=-__import__("zlib").MAX_WBITS)
 
 
+def decrypt_epub(encrypted_epub_path: str, output_epub_path: str, adl_db_path: str):
+    """Decrypt an entire ADEPT-protected EPUB and write the decrypted version.
+
+    Pipeline:
+      1. Extract rights.xml and encryption.xml from encrypted EPUB
+      2. Load RSA private key from ADL database
+      3. Decrypt AES content key from rights.xml
+      4. For each encrypted file, decrypt and write to output EPUB
+
+    Args:
+        encrypted_epub_path: Path to the ADEPT-protected EPUB file.
+        output_epub_path: Path where the decrypted EPUB will be written.
+        adl_db_path: Path to the ADL SQLite database file.
+
+    Raises:
+        ValueError: If rights.xml is missing or decryption fails.
+    """
+    rights_data, encryption_map = extract_rights_and_encryption(encrypted_epub_path)
+
+    if not rights_data:
+        raise ValueError(f"No META-INF/rights.xml found in {encrypted_epub_path}")
+
+    private_key = load_private_key(adl_db_path, rights_data["user_id"])
+    content_key = decrypt_content_key(
+        base64.b64decode(rights_data["encrypted_key_b64"]), private_key
+    )
+
+    with zipfile.ZipFile(encrypted_epub_path) as enc_zf:
+        file_map = {}  # file_name -> encrypted_data
+
+        for cipher_ref in encryption_map:
+            # Extract file name from URI (e.g., "OEBPS/Chapter1.xhtml" -> same)
+            file_name = cipher_ref.split("#")[-1] if "#" in cipher_ref else cipher_ref
+
+            try:
+                encrypted_data = enc_zf.read(file_name)
+                file_map[file_name] = encrypted_data
+            except KeyError:
+                # File not in encryption.xml — skip (e.g., mimetype, images)
+                pass
+
+        # Build output EPUB
+        with zipfile.ZipFile(
+            output_epub_path, "w", compression=zipfile.ZIP_DEFLATED
+        ) as out_zf:
+            for name in enc_zf.namelist():
+                if name == "mimetype":
+                    # mimetype must be stored uncompressed (ZIP_STORED) per EPUB spec
+                    data = enc_zf.read(name)
+                    out_zf.writestr(
+                        zipfile.ZipInfo("mimetype"),
+                        data,
+                        compress_type=zipfile.ZIP_STORED,
+                    )
+                elif name in file_map:
+                    # This is an encrypted file — decrypt it
+                    decrypted = decrypt_file(file_map[name], content_key)
+                    out_zf.writestr(name, decrypted)
+                else:
+                    # Not encrypted — copy as-is (e.g., mimetype, images)
+                    data = enc_zf.read(name)
+                    out_zf.writestr(name, data)
+
+
 def build_parser():
     """Build the argument parser for adl-decode."""
     parser = argparse.ArgumentParser(
