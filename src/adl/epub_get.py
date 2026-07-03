@@ -74,7 +74,7 @@ def get_ebook(filename):
 
         # Get epub URL and download it
         logging.info("Downloading {} from {} ...".format(title, ebook_url))
-        r = httpx.get(ebook_url)
+        r = httpx.get(ebook_url, timeout=(10, 300))
         r.raise_for_status()
         epub = r.content
 

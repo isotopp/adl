@@ -1,7 +1,8 @@
-from context import api_call, bom, data, xml_tools
-from unittest.mock import patch
+from context import api_call, bom, data, xml_tools, epub_get, patch_epub
+from unittest.mock import patch, MagicMock, mock_open
 import unittest
 import httpx
+from lxml import etree
 from pathlib import Path
 
 # Capture the real generate_signature at module load time to restore after pollution
@@ -189,6 +190,66 @@ class TestAPICallTimeout(unittest.TestCase):
 
             result = ff.call()
             self.assertFalse(result)
+
+    def test_ebook_download_uses_generous_timeout(self):
+        """get_ebook() downloads with a generous timeout for large files."""
+        d = bom.Device()
+        d.name = "local"
+
+        a = bom.Account()
+        a.urn = "toto"
+        a.devices = [d]
+
+        c = bom.Config()
+        c.current_user = "toto"
+
+        data.config = c
+        data.accounts = [a]
+
+        filename = TEST_DIR / "files" / "fake.acsm"
+
+        license_token = etree.Element("licenseToken")
+        license_token.text = "toto"
+
+        backup = (
+            epub_get.log_in,
+            epub_get.fulfill,
+            epub_get.generate_rights_xml,
+            patch_epub.patch,
+        )
+        epub_content = "Zipped book content"
+        rights_content = "<rights>GOD</rights>"
+        book_title = "Book Title"
+
+        epub_get.log_in = MagicMock(return_value=True)
+        epub_get.fulfill = MagicMock(
+            return_value=(book_title, "http://books.com/mybook.epub", license_token)
+        )
+        epub_get.generate_rights_xml = MagicMock(return_value=rights_content)
+        patch_epub.patch = MagicMock(
+            return_value="{}{}".format(epub_content, rights_content)
+        )
+
+        ebook_timeout = (10, 300)
+
+        with patch("adl.epub_get.httpx.get") as mock_get:
+            get_request = httpx.Request("GET", "http://books.com/mybook.epub")
+            mock_get.return_value = httpx.Response(
+                text=epub_content, status_code=200, request=get_request
+            )
+
+            with patch("builtins.open", mock_open()):
+                epub_get.get_ebook(filename)
+
+            call_kwargs = mock_get.call_args[1]
+            self.assertEqual(call_kwargs.get("timeout"), ebook_timeout)
+
+        (
+            epub_get.log_in,
+            epub_get.fulfill,
+            epub_get.generate_rights_xml,
+            patch_epub.patch,
+        ) = backup
 
 
 if __name__ == "__main__":
