@@ -34,11 +34,12 @@ This tool is published under the GPLv3
 Requirements
 ============
 
-- python 3.6
+- Python 3.9+
+- uv
 
-Install dependencies::
+Install dependencies and create the virtual environment::
 
-  pip install -r requirements.txt
+  uv sync
 
 
 How to use
@@ -48,7 +49,7 @@ Login
 -----
 Use::
 
-  ./adl.py login -u <adobeID>
+  uv run adl login -u <adobeID>
 
 You only need to login once, to exchange encryption keys.
 
@@ -62,25 +63,25 @@ Download a book
 
 Download a book with::
 
-  ./adl.py get -f <file.acsm>
+  uv run adl get -f <file.acsm>
 
 Manage accounts
 ---------------
 
 In case you have logged in several times, list your current accounts with::
 
-  ./adl.py account list
+  uv run adl account list
 
 And change the currently used account with::
 
-  ./adl.py account use <account urn>
+  uv run adl account use <account urn>
 
 Activate a device
 -----------------
 
 Mount the root of your device somewhere, and select the account you want to use. Then::
 
-  ./adl.py device register <mountpoint>
+  uv run adl device register <mountpoint>
 
 Several cases may occur:
 - The device has never been activated with ADE (or adl): activate the device

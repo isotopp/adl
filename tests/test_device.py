@@ -3,6 +3,9 @@ from unittest.mock import patch, MagicMock, Mock, mock_open
 import unittest
 import base64
 import os
+from pathlib import Path
+
+TEST_DIR = Path(__file__).resolve().parent
 
 class TestDevice(unittest.TestCase):
   def test_build_activation_file(self):
@@ -27,16 +30,17 @@ class TestDevice(unittest.TestCase):
     self.assertEqual(content, expected)    
 
   def test_read_device_file(self):
-    d = device.read_device_file("./fake_device")
+    fake_device = TEST_DIR / "fake_device"
+    d = device.read_device_file(fake_device)
     self.assertEqual(d.name, "Cybook Gen3")
     self.assertEqual(d.type, "tethered")
     self.assertEqual(d.fingerprint, "MDgwOTI2MDE0MjA2MDA3NjUzYQA=")
 
-    d = device.read_device_file("./fake_fake_device")
+    d = device.read_device_file(TEST_DIR / "fake_fake_device")
     self.assertIsNone(d)
 
   def test_read_activation_file(self):
-    username, plk, device_id = device.read_activation_file("./fake_device")
+    username, plk, device_id = device.read_activation_file(TEST_DIR / "fake_device")
     self.assertIsNone(username, True)
     self.assertIsNone(plk, True)
 

@@ -1,0 +1,30 @@
+[project]
+name = "adl"
+version = "0.1.0"
+description = "Download ebooks from Adobe ACSM files."
+readme = "README.rst"
+requires-python = ">=3.9"
+license = "GPL-3.0-or-later"
+dependencies = [
+  "cryptography>=3.1.0",
+  "lxml>=4.0",
+  "requests>=2.0",
+]
+
+[project.scripts]
+adl = "adl.cli:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0,<9",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.27,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "src"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

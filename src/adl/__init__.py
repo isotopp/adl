@@ -1,3 +1,6 @@
+import logging
+import sys
+
 from . import db
 
 data = db.DBData()

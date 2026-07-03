@@ -4,6 +4,9 @@ import unittest
 import base64
 from lxml import etree
 from cryptography.hazmat.primitives.serialization import load_der_private_key
+from pathlib import Path
+
+TEST_DIR = Path(__file__).resolve().parent
 
 class TestSignature(unittest.TestCase):
   def test_serialize(self):
@@ -26,7 +29,7 @@ class TestSignature(unittest.TestCase):
     expected_sig = b"hc4+wajpGQoJXoG5+tgOKoWgnzDrOlvDcLNyLsOXOkVnZQMdOY2rQR1yUZ4v0zaGMT9xNZjWe20QlkHr5b1WBonzwqDniIwDT2wtzBXiyA3LhAnDSpcMKxrdlQyqbUusv2SxrvJz4/ubjRh/GoiEZPX+H8jd9yoxXAN0jw4OA5E="
     k = "MIICXgIBAAKBgQDUMVSb7GkiIkcUGS9VuY2I5jvmyfNajNPhWuBD4MNnxJ+I/qPunyBqscgH1DKkDj7JGkPKtOVfNi7bCYrO0kcfoOUUxTRKAHXAEd8d7lbeQVlRV0fu2NvAySuFN/QnaQAmmc+rsuQHMEP0IwSYEB5CwUPZxcAowMskt7qHDLFQQwIDAQABAoGBAMYH3+nBAgE8Mk+8jWOYz1FjZaYm9XmdkqRvtntCybsPUsB8vauWUJ+imYdM75ISRWBTpc8JckOggqwjRKturbZPw5Z2+7Q9y3Je9a02VjmmQWZ7n2EAHkvMBx88OhBDUfyzrR5vQbfBbXY9SZTFMyACh/26KVlVIGSAiIPokPbpAkEA+khr5zviKZa0X6C+5o6wIxBUlyrOIreq3pKW0azVFKq0Bi146N7yfQ1Hbq7d0JyruzKrMGpWeFNL1qX/bqpqtwJBANkKK0gl+P3ehZTi1kSWbT4YUJYvA5/Fr3P9/n7iVcj6viGYXstXgsIVeN8txJmN5hK8mo6XjrFq3pBA0s0/qtUCQQDRPZaoPNI5PrsRb4vpqMTsq4xszOaE89QwO5FHPhzuKEBVIdMBrNJBZcagbCUZcMHJwPSJh30/HzQ6AZFo7aRFAkBZKUdMlWTrjf2cg294r79jEgQRHnFDsqd4ZDCnmX2aWf+/t2PB70plRwLn1Fp+pn+M1PQ9fd993SRfaHHxJaWdAkEA9AW8Olvx7wwoBNeO8d0/OFB1Li17eonXcvfrzioP2w2Zke45ex0l8c5CaW7pvnc6M4G3tdLdnTT8C4s3bYYGyA=="
 
-    filename = "files/fake2.ffquery"
+    filename = TEST_DIR / "files" / "fake2.ffquery"
     xml_str = etree.tostring(etree.parse(filename).getroot())
     s = xml_tools.generate_signature(xml_str, base64.b64decode(k))
     self.assertEqual(s, expected_sig)

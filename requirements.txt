@@ -1,6 +1,0 @@
-argparse
-ConfigParser
-requests
-lxml
-cryptography >= 3.1.0
-mock

@@ -3,6 +3,9 @@ from unittest.mock import patch, MagicMock, call, mock_open
 
 import unittest
 from lxml import etree
+from pathlib import Path
+
+TEST_DIR = Path(__file__).resolve().parent
 
 class TestGet(unittest.TestCase):
   def test_gen_rights(self):
@@ -14,7 +17,7 @@ class TestGet(unittest.TestCase):
     self.assertEqual(rights_xml, expected)
 
   def test_parse_acsm(self):
-    operator, _ = epub_get.parse_acsm("files/fake.acsm")
+    operator, _ = epub_get.parse_acsm(TEST_DIR / "files" / "fake.acsm")
     self.assertEqual(operator, "https://acs4.kobo.com/fulfillment")
 
   def test_login(self):
@@ -99,7 +102,7 @@ class TestGet(unittest.TestCase):
     data.config = c
     data.accounts = [a]
 
-    filename = 'files/fake.acsm'
+    filename = TEST_DIR / "files" / "fake.acsm"
 
     license_token = etree.Element("licenseToken")
     license_token.text = "toto"
