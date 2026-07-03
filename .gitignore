@@ -34,3 +34,5 @@ dist/
 
 # Local scratch files
 tmp.py
+*.epub
+*.acsm
